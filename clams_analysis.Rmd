@@ -1,0 +1,334 @@
+---
+title: "CLAMS_TR"
+author: "Kate"
+date: "5/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import data
+```{r}
+library(ggplot2) #for making figures
+library(tidyverse)
+library(vegan)
+library(RColorBrewer)
+library(extrafont)
+#font_import()
+
+#loadfonts(device = "pdf")
+
+rer <- read.csv("data/RER.csv")
+heat <- read.csv("data/heat.csv")
+vo2 <- read.csv("data/VO2.csv")
+vco2 <- read.csv("data/vCO2.csv")
+xtot <- read.csv("data/xTOT.csv")
+food <- read.csv("data/Food.csv")
+water <- read.csv("data/Water.csv")
+carbOx <- read.csv("data/carbOx.csv")
+lipOx <- read.csv("data/lipOx.csv")
+meta <- read.csv("data/meta.csv")
+
+meta$Day <- as.factor(meta$Day)
+
+theme_set(theme_bw())
+
+Dark <- c(0:11, 24)
+Light <- c(12:23) 
+
+grp_col <- c("")
+
+```
+
+Organize data
+```{r}
+rer_data <- rer %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "rer",
+               values_drop_na = TRUE)
+rer_data$time <- as.numeric(rer_data$time)
+
+heat_data <- heat %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "heat",
+               values_drop_na = TRUE)
+heat_data$time <- as.numeric(heat_data$time)
+
+vo2_data <- vo2 %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "vo2",
+               values_drop_na = TRUE)
+vo2_data$time <- as.numeric(vo2_data$time)
+
+vco2_data <- vco2 %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "vco2",
+               values_drop_na = TRUE)
+vco2_data$time <- as.numeric(vco2_data$time)
+
+xtot_data <- xtot %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "xtot",
+               values_drop_na = TRUE)
+xtot_data$time <- as.numeric(xtot_data$time)
+
+food_data <- food %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "food",
+               values_drop_na = TRUE)
+food_data$time <- as.numeric(food_data$time)
+
+water_data <- water %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "water",
+               values_drop_na = TRUE)
+water_data$time <- as.numeric(water_data$time)
+
+carbOx_data <- carbOx %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "carbOx",
+               values_drop_na = TRUE)
+carbOx_data$time <- as.numeric(carbOx_data$time)
+
+lipOx_data <- lipOx %>%
+  pivot_longer(cols = starts_with("X"),
+               names_to = "time",
+               names_prefix = "X",
+               values_to = "lipOx",
+               values_drop_na = TRUE)
+lipOx_data$time <- as.numeric(lipOx_data$time)
+
+```
+
+Combine data
+```{r}
+data <- meta %>%
+  full_join(rer_data, by = "mouseID")
+
+data <- data %>%
+  full_join(heat_data, by = c("mouseID", "time"))
+
+data <- data %>%
+  full_join(vo2_data, by = c("mouseID", "time"))
+
+data <- data %>%
+  full_join(vco2_data, by = c("mouseID", "time"))
+
+data <- data %>%
+  full_join(xtot_data, by = c("mouseID", "time"))
+
+data <- data %>%
+  full_join(food_data, by = c("mouseID", "time"))
+
+data <- data %>%
+  full_join(water_data, by = c("mouseID", "time"))
+
+data <- data %>%
+  full_join(carbOx_data, by = c("mouseID", "time"))
+
+data <- data %>%
+  full_join(lipOx_data, by = c("mouseID", "time"))
+
+data_long <- data %>%
+  pivot_longer(cols = c("rer", "heat","vo2", "vco2", "xtot", "food", "water", "carbOx", "lipOx"),
+               names_to = "measure",
+               values_to = "value",
+               values_drop_na = TRUE)
+```
+
+```{r}
+meas_sum <- c("xtot","food", "water")
+meas_mean <- c("heat","rer", "vco2", "vo2", "carbOx", "lipOx")
+
+summary_dark <- data %>%
+  filter(time %in% Dark)%>%
+  group_by(mouseID)%>%
+  mutate(across(meas_mean,mean, na.rm = TRUE))%>%
+  mutate(across(meas_sum,sum, na.rm = TRUE))%>%
+  filter(time == "0") %>%
+  select(-time)
+summary_dark$period <- "Dark"
+  
+
+summary_light <- data %>%
+  filter(time %in% Light)%>%
+  group_by(mouseID) %>%
+  mutate(across(meas_mean,mean, na.rm = TRUE))%>%
+  mutate(across(meas_sum,sum, na.rm = TRUE))%>%
+  filter(time == "12") %>%
+  select(-time)
+summary_light$period <- "Light"
+
+
+summary_data <- bind_rows(summary_dark, summary_light)
+summary_data[summary_data == 0] <- NA
+summary_data$group <- paste(summary_data$pDiet, summary_data$Sex, summary_data$period)
+
+summary_data_long <- summary_data %>%
+  pivot_longer(cols = c("rer", "heat","vo2", "vco2", "xtot", "food", "water", "carbOx", "lipOx"),
+               names_to = "Measure",
+               values_to = "Value",
+               values_drop_na = TRUE)
+
+```
+
+Summary statistics and figures
+```{r}
+measures <- levels(as.factor(data_long$measure))
+
+summary_data$Sex = factor(summary_data$Sex, levels=c('Male','Female'))
+
+theme_set(theme_classic(base_size = 12))
+
+pltList <- list()
+
+for (measure in measures) {
+  plot <- summary_data %>%
+  ggplot(aes_string(x="period", y=measure, fill="pDiet")) +
+  geom_boxplot(outlier.size = 0, show.legend = FALSE)+
+  geom_point(show.legend = FALSE, position=position_jitterdodge(jitter.width = 0.1), aes(group=pDiet), size = 2) +
+    scale_fill_manual(values = c("white", "#666666"))+
+    theme(strip.background = element_blank(), axis.title.x = element_blank(),
+          axis.line = element_line(colour="black"), axis.ticks = element_line(colour="black"),
+          axis.text = element_text(colour="black", size = 12, family = "sans", face = "plain"),
+          axis.title = element_text(colour="black", size = 12, family = "sans", face = "plain"),
+          strip.text = element_text(colour="black", size = 12, family = "sans", face = "plain", vjust = 2.4))+
+    scale_y_continuous(label = scales::comma)+
+  facet_grid(.~Sex)
+  ggsave(plot,filename=paste0("figs/",measure,"_average.pdf"),width = 3, height = 3, units = "in", dpi = 300)
+  
+  pltList[[measure]] <- print(plot)
+}
+
+pltList
+
+#cowplot::plot_grid(pltList[[2]], pltList[[3]], pltList[[9]],
+ #                  pltList[[7]], pltList[[6]], pltList[[4]],
+  #                 ncol=3, align='v', 
+   #                labels = c("d", "e","f","g", "h", "i"))
+
+#ggsave("figs/clams.pdf", width = 11 , height = 6, units = "in")
+
+```
+
+CLAMS data were analyzed using linear mixed-effect models (LMM) using the lme4 package (R package, RRID:SCR_015654) with main effects and multiple comparisons determined by Satterthwaite's method of approximation in lmerTest (R package, RRID:SCR_015656). Response variable data were separated into light (7 am to 7 pm) and dark time periods (7 pm to 7 am), average values were taken for heat, rer, vco2, vo2, carbox, and lipox, and sums were taken for xtot, food, and water consumption. LMM were performed with time period, mouse sex, and paternal diet as fixed variables, and mouse ID and litter as nested random effects.
+```{r}
+library(nlme)
+library(emmeans)
+library(lme4)
+library(ggpubr)
+library(lmerTest)
+
+# Set up a data frame to hold the results. First row is just NAs
+output = data.frame(matrix(data = NA, nrow = 1, ncol = 7))
+cn = c('pDiet_pval', 'period_pval', 'Sex_pval', "pDiet:period_pval", "pDiet:Sex_pval", "period:Sex_pval", "pDiet:period:Sex_pval")
+colnames(output) = cn
+blank = output
+
+# Set up a data frame to hold the results. First row is just NAs
+posthoc = data.frame(matrix(data = NA, nrow = 1, ncol = 9))
+cn = c("Sex", "period", "pDiet", "contrast", "estimate", "SE", "df", "t.ratio", "p.value" )
+colnames(posthoc) = cn
+blank = posthoc
+
+for (measure in measures) {
+    dat=filter(summary_data_long,
+             Measure==measure) 
+    
+  mixed.lm <- lmer(Value ~ pDiet*period*Sex +(1|Litter/mouseID), data = dat)
+  s <- summary(mixed.lm)
+  emm_s.t <- emmeans(mixed.lm, pairwise ~ pDiet | Sex | period, lmer.df = "satterthwaite")
+  p <- pairs(emm_s.t, simple = "each")
+  plot <- emmip(mixed.lm, period ~ pDiet | Sex) + ggtitle(measure)
+  
+  output <- rbind(output, s$coefficients[2:8,"Pr(>|t|)"])
+  
+  posthoc <- rbind(posthoc, as.data.frame(p$emmeans))
+  
+  print(plot)
+  ggsave(plot, file=paste0("figs/plot_", measure,".jpeg"))
+}
+
+output = output[-1,]  # Remove the NAs
+rownames(output) <- measures
+
+#write.csv(output, file = 'results/main_effects.csv')
+
+posthoc <- posthoc[-1,]
+posthoc$measure <- rep(measures, each = 12)
+
+#write.csv(posthoc, file = 'results/multiple_comparisons_satter.csv')
+
+```
+
+```{r}
+library(multcompView)
+
+# Set up a data frame to hold the results. First row is just NAs
+posthoc = data.frame(matrix(data = NA, nrow = 1, ncol = 6))
+cn = c("contrast", "estimate", "SE", "df", "t.ratio", "p.value" )
+colnames(posthoc) = cn
+blank = posthoc
+
+letters <- data.frame(matrix(data = NA, nrow = 1, ncol = 8))
+cn = c("CON female dark", "CON female light", "CON male dark", "CON male light", "PHF female dark", "PHF female light", "PFH male dark", "PHF male light")
+colnames(letters) = cn
+blank = letters
+
+
+for (measure in measures) {
+  dat <- summary_data_long %>%
+  filter(Measure == measure)
+  
+lm <- lmer(Value~group + (1|Litter/mouseID), dat)
+anova(lm)
+em <- emmeans(lm, "group")
+p <- summary(pairs(em))
+
+posthoc <- rbind(posthoc, p)
+
+p$contrast <- gsub("\\s+", "", p$contrast)
+
+m <- as.vector(p$p.value)
+names(m) <- p$contrast
+
+l <- multcompLetters(m)
+
+letters <- rbind(letters, l$Letters)
+
+  
+}
+
+
+posthoc <- posthoc[-1,]
+posthoc$measure <- rep(measures, each = 28)
+
+letters <- letters[-1,]
+letters$measure <- rep(measures, each = 1)
+
+letters <- letters[,c("measure", "CON female dark", "PHF female dark", "CON female light", "PHF female light", "CON male dark", "PFH male dark", "CON male light", "PHF male light")]
+
+
+write.csv(posthoc, file = 'results/multiple_comparisons_bygroup.csv')
+write.csv(letters, file = "results/multiple_comparisons_letters.csv")
+
+```
+
